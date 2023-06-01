@@ -1,0 +1,30 @@
+Key to columns:
+(1) Cluster identification number
+(2,3) Right ascension (hms) and declination (hms) (J2000)
+(4,5) Right ascension (deg) and declination (deg) (J2000)
+(6,7) Galactic longitude (Gl) and latitude (Gb) in degrees
+(8,9) Gamma & gamma (Vivek please fill what they mean and units)
+(10) Core radius in arcminutes from Harris Catalog
+(11) Core radius in arcminutes from Baumgardt Catalog
+(12) Half-light radius in arcminutes from Harris Catalog
+(13) Half-light radius in arcminutes from Baumgardt Catalog
+(14) Half-mass radius in arcminutes from Baumgardt Catalog
+(15) Core radius in parsec from Baumgardt Catalog
+(16) Half-light radius in parsec from Baumgardt Catalog
+(17) Half-mass radius in parsec from Baumgardt Catalog
+(18) Distance to GC from Sun (kiloparsecs) Harris Catalog
+(19) Distance to GC from Sun (kiloparsecs) Baumgardt Catalog
+(20) Rise time UTC for 20 deg elevation at MeerKAT
+(21) Set time UTC for 20 deg elevation at MeerKAT
+(22) Rise time UTC for 50 deg elevation at MeerKAT
+(23) Set time UTC for 50 deg elevation at MeerKAT
+(24) Rise time LST for 20 deg elevation at MeerKAT
+(25) Set time LST for 20 deg elevation at MeerKAT
+(26) Rise time LST for 50 deg elevation at MeerKAT
+(27) Set time LST for 50 deg elevation at MeerKAT
+(28) Mosaic UTC to generate beam tiling # Rise time UTC at 20 deg + 20 mins
+(29) Is Cluster Core-Collapsed? 1 - Yes, 0 - No
+
+# Remember source is between 20-50 deg elevation between Rise_time_sidereal_20_deg and Rise_time_sidereal_50_deg
+# or Set_time_sidereal_50_deg and Set_time_sidereal_20_deg. Also take into account Tobs when scheduling.
+
