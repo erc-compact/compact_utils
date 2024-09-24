@@ -49,14 +49,11 @@ def createBeamMatrix(antennaCoords, sourceCoord, observeTime, frequencies, beamN
     else:
         antennaKat = makeKatPointAntenna(antennaCoords)
 
-   
-    # boresight = sourceCoord
     boresight = katpoint.Target('boresight, radec, {}, {}'.format(
                 sourceCoord[0], sourceCoord[1]))
     reference = makeKatPointAntenna(
             ["ref, -30:42:39.8, 21:26:38.0, 1035.0",])[0]
     psf = PsfSim(antennaKat, frequencies[0])
-
     newBeamShape = psf.get_beam_shape(sourceCoord, observeTime, size, resolution, weights)
     if "psf_plot" in output:
         newBeamShape.plot_psf(output["psf_plot"][0], overlap = overlap,
@@ -85,7 +82,7 @@ def createBeamMatrix(antennaCoords, sourceCoord, observeTime, frequencies, beamN
             createTilingRegion(equatorial_coordinates, actualShape, output["tiling_region"])
 
         if "tiling_position_file" in output:
-            print("Writing tiling position file")
+            print("Writing tiling position file to ", output["tiling_position_file"])
             equatorial_coordinates = tiling.get_equatorial_coordinates()
             equatorial_coordinates = SkyCoord(ra=equatorial_coordinates[:,0]*u.deg, dec=equatorial_coordinates[:,1]*u.deg)
             ra = equatorial_coordinates.ra.to_string(unit=u.hour, sep=':', pad=True, precision=2)
@@ -430,31 +427,34 @@ def parseOptions(parser):
     if args.half_mass:
         half_mass_radius = args.half_mass
     else:
-        parser.error("no half mass radius specified, try --half_light radius")
+        parser.error("no half mass radius specified, try --half_mass radius")
 
     paras  = {"antennaCoords": antennaCoords,
         "sourceCoord": sourceCoord,
         "observeTime": observeTime,
         "frequencies":frequencies,
+        "beamNum":beamnum,
         "duration":duration,
         "overlap":overlap,
-        "beamNum":beamnum,
         "subarray":subarray,
         "update_interval":update_interval,
+        "overlay_source":overlay_source,
+        "overlay_source_name":overlay_source_name,
         "size":size,
         "resolution":resolution,
         "tilingMethod":tilingMethod,
         "tilingShape":tilingShape,
         "tilingParameter":tilingParameter,
         "tilingParameterCoordinateType":tilingParameterCoordinateType,
-        "overlay_source":overlay_source,
-        "overlay_source_name":overlay_source_name,
         "weights":weights,
         "interpolation":interpolation,
         "output":output,
         "core_radius":core_radius,
         "half_light_radius":half_light_radius,
-        "half_mass_radius":half_mass_radius}
+        "half_mass_radius":half_mass_radius,
+        "append_data_core":append_data_core,
+        "append_data_half_light":append_data_half_light,
+        "append_data_gbt":append_data_gbt}
 
     createBeamMatrix(**paras)
 
