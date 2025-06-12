@@ -23,6 +23,7 @@ DATABASE_URI = (f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{D
 engine = sqlalchemy.create_engine(DATABASE_URI)
 
 
+
 class UUIDUtility:
     @staticmethod
     def generate_uuid_string():
@@ -57,18 +58,36 @@ class UUIDUtility:
             for i in range(n)
         ]
     
+# shortlist_query = """
+# SELECT 
+#     unique(HEX(f.id)) AS fold_candidate_id
+# FROM fold_candidate f
+# INNER JOIN candidate_tracker c
+#     ON f.id = c.fold_candidate_id
+# INNER JOIN  
+#     data_product dp ON dp.id = f.dp_id
+# WHERE
+#     dp.`created_by_run_name` IN ("CRAZY_GUS_4", "CRAZY_GUS_5", "CRAZY_GUS_6", "CRAZY_GUS_7", "CRAZY_GUS_8","CRAZY_GUS_9","CRAZY_GUS_10","CRAZY_GUS_11") and
+# 	( f.fold_snr > 7.5 OR
+#       (c.candidate_filter_id = 1 AND c.value > 0.1)
+#    OR
+#       (c.candidate_filter_id = 2 AND c.value > 0.1)
+#    OR
+#       (c.candidate_filter_id = 3 AND c.value > 0.1)
+#    OR
+#       (c.candidate_filter_id = 4 AND c.value > 0.1) )
+# """
+
+    
 shortlist_query = """
 SELECT 
     unique(HEX(f.id)) AS fold_candidate_id
-FROM fold_candidate f
+FROM fold_candidate f 
 INNER JOIN candidate_tracker c
     ON f.id = c.fold_candidate_id
-INNER JOIN  
-    data_product dp ON dp.id = f.dp_id
 WHERE
-    dp.`created_by_run_name` IN ("CRAZY_GUS_4", "CRAZY_GUS_5", "CRAZY_GUS_6", "CRAZY_GUS_7", "CRAZY_GUS_8","CRAZY_GUS_9","CRAZY_GUS_10","CRAZY_GUS_11") and
-	( f.fold_snr > 7.5 OR
-      (c.candidate_filter_id = 1 AND c.value > 0.1)
+	f.fold_snr > 7.5  and batch_name='jaime' AND
+    (  (c.candidate_filter_id = 1 AND c.value > 0.1)
    OR
       (c.candidate_filter_id = 2 AND c.value > 0.1)
    OR
@@ -77,10 +96,12 @@ WHERE
       (c.candidate_filter_id = 4 AND c.value > 0.1) )
 """
 
+
 shortlist_df = pd.read_sql_query(shortlist_query, engine)
 
 print(f"Shortlisted data frame has {len(shortlist_df.index)} number of rows")
 
+fold_filter_list = ", ".join([f"'{id_}'" for id_ in shortlist_df['fold_candidate_id'].tolist()])
 
 main_query = f"""
     SELECT 
@@ -94,18 +115,18 @@ main_query = f"""
         '0' as gb, 
         '0' as mjd_start, 
         po.utc_start as utc_start, 
-        1/s.spin_period as f0_usr, 
-        1/f.spin_period as f0_opt, 
+        1000/s.spin_period_ms as f0_usr, 
+        1000/f.spin_period_ms as f0_opt, 
         '0' as f0_opt_err, 
-        -1 * s.pdot / (s.spin_period  * s.spin_period) as f1_user, 
-        -1 * f.pdot / (f.spin_period  * f.spin_period) as f1_opt, 
+        -1 * s.pdot / (s.spin_period_ms  * s.spin_period_ms) as f1_user, 
+        -1 * f.pdot / (f.spin_period_ms  * f.spin_period_ms) as f1_opt, 
         '0' as f1_opt_err, 
-        s.pdot * 3e8 / s.spin_period as acc_user, 
-        f.pdot * 3e8 / f.spin_period as acc_opt, 
-        '0' as acc_opt_err, 
+        s.acc as acc_user, 
+        f.acc as acc_opt, 
+        f.acc_error as acc_opt_err, 
         s.dm as dm_user, 
         f.dm as dm_opt, 
-        '0' as dm_opt_err, 
+        f.dm_error dm_opt_err, 
         s.snr as sn_fft, 
         f.fold_snr as sn_fold, 
         s.segment_pepoch as pepoch, 
@@ -115,23 +136,28 @@ main_query = f"""
         f.id as fold_candidate_id_bin,
         CONCAT(dp.filepath, CONCAT(LEFT(dp.filename, LENGTH(dp.filename) - 3), '.png')) AS png_path,
         "null" as filterbank_path, 
-        "metafiles/3HM.meta" AS metafile_path,
-        "null" as candidate_tarball_path
+        "metafiles/HR.meta" AS metafile_path,
+        "null" as candidate_tarball_path,
+        s.id as search_candidate_id_bin
 
 
 FROM fold_candidate f
-INNER JOIN search_candidate s ON s.id = f.search_candidate_id
-INNER JOIN data_product dp ON f.dp_id = dp.id
-INNER JOIN processing p ON dp.created_by_task_id = p.task_id AND dp.created_by_run_name = p.run_name
-INNER JOIN beam b ON b.id = dp.beam_id
-INNER JOIN pointing po ON po.id = b.pointing_id
-INNER JOIN target t ON t.id = po.target_id
-WHERE HEX(f.id) IN ({", ".join([f"'{id_}'" for id_ in shortlist_df['fold_candidate_id'].tolist()])})
+INNER JOIN search_candidate s ON  HEX(f.id) IN ({fold_filter_list}) and s.id = f.search_candidate_id 
+INNER JOIN data_product dp ON HEX(f.id) IN ({fold_filter_list}) and f.dp_id = dp.id
+INNER JOIN beam b  ON  b.id = dp.beam_id
+INNER JOIN pointing po ON  po.id = b.pointing_id
+INNER JOIN target t  ON  t.id = po.target_id
 """
+#INNER JOIN processing p ON dp.created_by_task_id = p.task_id AND dp.created_by_run_name = p.run_name
+
+#WHERE HEX(f.id) IN ({fold_filter_list})
+
 main_df = pd.read_sql_query(main_query, engine)
 
 print(f"Main DF has {len(main_df.index)} number of rows")
 
+#change UTC to ISOT
+main_df['utc_start'] = main_df['utc_start'].dt.strftime('%Y-%m-%dT%H:%M:%S')
 
 # 2) Extract IDs as a list
 id_list = main_df["fold_candidate_id"].tolist()
@@ -151,10 +177,11 @@ SELECT
     HEX(f.id) AS fold_candidate_id
 FROM fold_candidate f
 INNER JOIN candidate_tracker c 
-    ON f.id = c.fold_candidate_id
-WHERE c.candidate_filter_id = 1
+    ON c.candidate_filter_id = 1
   AND HEX(f.id) IN ({", ".join(placeholders)})
+  AND f.id = c.fold_candidate_id
 """)
+
 
 pics_trapum_ter5_query = text(f"""
 SELECT
@@ -162,9 +189,9 @@ SELECT
     HEX(f.id) AS fold_candidate_id
 FROM fold_candidate f
 INNER JOIN candidate_tracker c 
-    ON f.id = c.fold_candidate_id
-WHERE c.candidate_filter_id = 2
+    ON c.candidate_filter_id = 2
   AND HEX(f.id) IN ({", ".join(placeholders)})
+  AND f.id = c.fold_candidate_id
 """)
 
 pics_palfa_meerkat_l_sband_best_fscore = text(f"""
@@ -173,9 +200,9 @@ SELECT
     HEX(f.id) AS fold_candidate_id
 FROM fold_candidate f
 INNER JOIN candidate_tracker c 
-    ON f.id = c.fold_candidate_id
-WHERE c.candidate_filter_id = 3
+    ON c.candidate_filter_id = 3
   AND HEX(f.id) IN ({", ".join(placeholders)})
+  AND f.id = c.fold_candidate_id
 """)
 
 
@@ -185,15 +212,19 @@ SELECT
     HEX(f.id) AS fold_candidate_id
 FROM fold_candidate f
 INNER JOIN candidate_tracker c 
-    ON f.id = c.fold_candidate_id
-WHERE c.candidate_filter_id = 4
+    ON c.candidate_filter_id = 4
   AND HEX(f.id) IN ({", ".join(placeholders)})
+  AND f.id = c.fold_candidate_id
 """)
 
 pics_palfa_df = pd.read_sql_query(pics_palfa_query, engine, params=params)
+print(f"pics_palfa_df has {len(pics_palfa_df.index)} number of rows")
 pics_trapum_ter5_df = pd.read_sql_query(pics_trapum_ter5_query, engine, params=params)
+print(f"pics_trapum_ter5_df has {len(pics_trapum_ter5_df.index)} number of rows")
 pics_palfa_meerkat_l_sband_best_fscore_df = pd.read_sql_query(pics_palfa_meerkat_l_sband_best_fscore, engine, params=params)
+print(f"pics_palfa_meerkat_l_sband_best_fscore_df has {len(pics_palfa_meerkat_l_sband_best_fscore_df.index)} number of rows")
 pics_meerkat_l_sband_combined_best_recall_df = pd.read_sql_query(pics_meerkat_l_sband_combined_best_recall, engine, params=params)
+print(f"pics_meerkat_l_sband_combined_best_recall_df has {len(pics_meerkat_l_sband_combined_best_recall_df.index)} number of rows")
 
                                   
 merged_df = main_df.merge(pics_palfa_df, on="fold_candidate_id", how="left")
@@ -203,6 +234,7 @@ merged_df = merged_df.merge(pics_meerkat_l_sband_combined_best_recall_df, on="fo
 
 #convert fold_candidate_id_bin to string using uuid
 merged_df['fold_candidate_id_bin'] = merged_df['fold_candidate_id_bin'].apply(UUIDUtility.convert_binary_uuid_to_string)
+merged_df['search_candidate_id_bin'] = merged_df['search_candidate_id_bin'].apply(UUIDUtility.convert_binary_uuid_to_string)
 
 #remove fold_candidate_id column
 merged_df = merged_df.drop(columns=['fold_candidate_id'])
@@ -210,15 +242,20 @@ merged_df = merged_df.drop(columns=['fold_candidate_id'])
 #rename png_path as original_png_path
 merged_df.rename(columns={'png_path':'original_png_path'}, inplace=True)
 
+#get PNG path as relative path from the directory with the name PROCESSING
+
+#remove everything before PROCESING/
+merged_df['png_path'] = 'plots/' + merged_df['original_png_path'].str.split('PROCESSING/').str[-1]
+
 #write out png_path as a new column which is plots/{basename(png_path)}
-merged_df['png_path'] = 'plots/' + merged_df['original_png_path'].str.split('/').str[-1]
+#merged_df['png_path'] = 'plots/' + merged_df['original_png_path'].str.split('/').str[-1]
 
 print(f"merged df has {len(merged_df.index)} rows")
 
 
 
 #save to csv
-merged_df.to_csv('merged_df_round2.csv', index=False)
+merged_df.to_csv('HR_accel_search_snrANDpics.csv', index=False)
 
 
 
